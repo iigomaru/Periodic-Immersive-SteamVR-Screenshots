@@ -53,6 +53,9 @@ struct VR_IVRApplications_FnTable * oApplications;
 struct VR_IVRScreenshots_FnTable * oScreenshots;
 //struct VR_IVRInput_FnTable * oInput;
 
+int sshour = -1;
+int ssday  = -1;
+int ssyear = -1;
 
 int main()
 {
@@ -98,47 +101,68 @@ int main()
 
     while( true )
     {
-        printf("Press ENTER key to Continue\n");  
-        getchar();
 
-		time_t rawtime;
-        struct tm * timeinfo;
-		time ( &rawtime );
-        timeinfo = localtime ( &rawtime );
+		time_t now = time(NULL);
+		struct tm *tm_struct = localtime(&now);
 
-		char path_buffer[_MAX_PATH];
-		char drive[_MAX_DRIVE];
-		char dir[_MAX_DIR];
-		char fname[_MAX_FNAME];
-		char ext[_MAX_EXT];
+		int hour = tm_struct->tm_hour;
+		int day  = tm_struct->tm_yday;
+		int year = tm_struct->tm_year;
+
+		if (sshour < 0 || ssday < 0 || ssyear < 0)
+		{
+			sshour = hour;
+			ssday  = day;
+			ssyear = year;
+		}
+
+		// breaks on new years 2099 will prob fix that before then
+		if (hour > sshour || day > ssday || year > ssyear)
+		{
+
+			time_t rawtime;
+			struct tm * timeinfo;
+			time ( &rawtime );
+			timeinfo = localtime ( &rawtime );
+
+			char path_buffer[_MAX_PATH];
+			char drive[_MAX_DRIVE];
+			char dir[_MAX_DIR];
+			char fname[_MAX_FNAME];
+			char ext[_MAX_EXT];
 
 
-		// Gets the path of the exe file
-		GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
-		_splitpath( path_buffer, drive, dir, fname, ext );
-		_makepath( path_buffer, drive, dir, NULL, NULL ); // removes the file name and extension from the buffer
-		char ssFolderName[] = "Screenshots\\";
-		strncat(path_buffer, ssFolderName, sizeof(ssFolderName));
-		CreateDirectory(path_buffer, NULL);
-		char ssMonthFolder[] = "0000-00\\";
-		strftime(ssMonthFolder, sizeof ssMonthFolder, "%Y-%m\\", timeinfo);
-		strncat(path_buffer, ssMonthFolder, sizeof ssMonthFolder);
-		CreateDirectory(path_buffer, NULL);
+			// Gets the path of the exe file
+			GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
+			_splitpath( path_buffer, drive, dir, fname, ext );
+			_makepath( path_buffer, drive, dir, NULL, NULL ); // removes the file name and extension from the buffer
+			char ssFolderName[] = "Screenshots\\";
+			strncat(path_buffer, ssFolderName, sizeof(ssFolderName));
+			CreateDirectory(path_buffer, NULL);
+			char ssMonthFolder[] = "0000-00\\";
+			strftime(ssMonthFolder, sizeof ssMonthFolder, "%Y-%m\\", timeinfo);
+			strncat(path_buffer, ssMonthFolder, sizeof ssMonthFolder);
+			CreateDirectory(path_buffer, NULL);
 
-		char timestamp[] = "2011-10-08_07-07-09";
-		char screenshotpath[sizeof path_buffer + sizeof timestamp];
-		strcpy(screenshotpath, path_buffer);
-		strftime(timestamp, sizeof timestamp, "%Y-%m-%d_%H-%M-%S", timeinfo);
-		strncat(screenshotpath, timestamp, sizeof timestamp);
-		char screenshotpathvr[sizeof screenshotpath + 4];
-		strcpy(screenshotpathvr, screenshotpath);
-		strncat(screenshotpathvr, "_VR", 4);
+			char timestamp[] = "2011-10-08_07-07-09";
+			char screenshotpath[sizeof path_buffer + sizeof timestamp];
+			strcpy(screenshotpath, path_buffer);
+			strftime(timestamp, sizeof timestamp, "%Y-%m-%d_%H-%M-%S", timeinfo);
+			strncat(screenshotpath, timestamp, sizeof timestamp);
+			char screenshotpathvr[sizeof screenshotpath + 4];
+			strcpy(screenshotpathvr, screenshotpath);
+			strncat(screenshotpathvr, "_VR", 4);
 
-		ScreenshotHandle_t screenshot;
-        EVRScreenshotError ssERR;
-		ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, screenshotpath, screenshotpathvr);
-		printf( "Screenshot (%d).\n", ssERR );
-		//printf( "Current Directory: %s\n", path_buffer);
+			ScreenshotHandle_t screenshot;
+			EVRScreenshotError ssERR;
+			ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, screenshotpath, screenshotpathvr);
+			printf( "Screenshot (%d).\n", ssERR );
+			//printf( "Current Directory: %s\n", path_buffer);
+
+			sshour = hour;
+			ssday  = day;
+			ssyear = year;
+		}
 
 		Sleep( 50 );
     }
