@@ -49,7 +49,7 @@ void * CNOVRGetOpenVRFunctionTable( const char * interfacename )
 // These are interfaces into OpenVR, they are basically function call tables.
 //struct VR_IVRSystem_FnTable * oSystem;
 //struct VR_IVROverlay_FnTable * oOverlay;
-//struct VR_IVRApplications_FnTable * oApplications;
+struct VR_IVRApplications_FnTable * oApplications;
 struct VR_IVRScreenshots_FnTable * oScreenshots;
 //struct VR_IVRInput_FnTable * oInput;
 
@@ -72,10 +72,29 @@ int main()
 		// get the interfaces we expect.
 		//oSystem = CNOVRGetOpenVRFunctionTable( IVRSystem_Version );
 		//oOverlay = CNOVRGetOpenVRFunctionTable( IVROverlay_Version );
-		//oApplications = CNOVRGetOpenVRFunctionTable( IVRApplications_Version );
+		oApplications = CNOVRGetOpenVRFunctionTable( IVRApplications_Version );
 		oScreenshots = CNOVRGetOpenVRFunctionTable( IVRScreenshots_Version );
 		//oInput = CNOVRGetOpenVRFunctionTable( IVRInput_Version );
 	}
+
+	if (!oApplications->IsApplicationInstalled("iigo.PISS"))
+    {
+		char path_buffer[_MAX_PATH];
+		char drive[_MAX_DRIVE];
+		char dir[_MAX_DIR];
+		char fname[_MAX_FNAME];
+		char ext[_MAX_EXT];
+
+		// Gets the path of the exe file
+		GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
+		_splitpath( path_buffer, drive, dir, fname, ext );
+		_makepath( path_buffer, drive, dir, NULL, NULL ); // removes the file name and extension from the buffer
+		strncat(path_buffer, "PISS.vrmanifest", sizeof("PISS.vrmanifest"));
+		EVRApplicationError app_error;
+		app_error = oApplications->AddApplicationManifest(path_buffer, false);
+
+		//printf( "%s (%d).\n", path_buffer, app_error );
+    }
 
     while( true )
     {

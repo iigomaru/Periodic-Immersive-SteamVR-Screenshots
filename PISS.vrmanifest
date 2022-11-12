@@ -1,0 +1,16 @@
+{
+	"source" : "builtin",
+	"applications": [{
+		"app_key": "iigo.PISS",
+		"launch_type": "binary",
+		"binary_path_windows": "PISS.exe",
+		"is_dashboard_overlay": true,
+
+		"strings": {
+			"en_us": {
+				"name": "Periodic-Immersive-SteamVR-Screenshots",
+				"description": "Automatic SteamVR Screenshot Utility"
+			}
+		}
+	}]
+}
