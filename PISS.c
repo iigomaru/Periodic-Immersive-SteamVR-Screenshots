@@ -1,7 +1,14 @@
+// Periodic Immersive SteamVR Screenshots is a simple utility that utilizes the OpenVR api to take a
+// SteamVR screenshot every hour on the top of the hour.
+
 // System headers for any extra stuff we need.
 #include <stdbool.h>
+#include <stdio.h>
+#include <time.h>
+#include <string.h>
 
 // Include CNFG (rawdraw) for generating a window and/or OpenGL context.
+// Included to manage windows header files, but may be used more explicitly in the future.
 #define CNFG_IMPLEMENTATION
 #define CNFGOGL
 #include "rawdraw_sf.h"
@@ -9,12 +16,6 @@
 // Include OpenVR header so we can interact with VR stuff.
 #undef EXTERN_C
 #include "openvr_capi.h"
-
-// Stuff to get system time
-#include <stdio.h>
-#include <time.h>
-#include <string.h>
-
 
 // OpenVR Doesn't define these for some reason (I don't remember why) so we define the functions here. They are copy-pasted from the bottom of openvr_capi.h
 intptr_t VR_InitInternal( EVRInitError *peError, EVRApplicationType eType );
@@ -53,9 +54,6 @@ struct VR_IVRApplications_FnTable * oApplications;
 struct VR_IVRScreenshots_FnTable * oScreenshots;
 //struct VR_IVRInput_FnTable * oInput;
 
-int sshour = -1;
-int ssday  = -1;
-int ssyear = -1;
 
 int main()
 {
@@ -80,50 +78,45 @@ int main()
 		//oInput = CNOVRGetOpenVRFunctionTable( IVRInput_Version );
 	}
 
-	if (!oApplications->IsApplicationInstalled("iigo.PISS"))
-    {
-		char path_buffer[_MAX_PATH];
-		char drive[_MAX_DRIVE];
-		char dir[_MAX_DIR];
-		char fname[_MAX_FNAME];
-		char ext[_MAX_EXT];
+	{
+		if (!oApplications->IsApplicationInstalled("iigo.PISS"))
+		{
+			char path_buffer[_MAX_PATH];
+			char drive[_MAX_DRIVE];
+			char dir[_MAX_DIR];
+			char fname[_MAX_FNAME];
+			char ext[_MAX_EXT];
 
-		// Gets the path of the exe file
-		GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
-		_splitpath( path_buffer, drive, dir, fname, ext );
-		_makepath( path_buffer, drive, dir, NULL, NULL ); // removes the file name and extension from the buffer
-		strncat(path_buffer, "PISS.vrmanifest", sizeof("PISS.vrmanifest"));
-		EVRApplicationError app_error;
-		app_error = oApplications->AddApplicationManifest(path_buffer, false);
+			// Gets the path of the exe file
+			GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
+			_splitpath( path_buffer, drive, dir, fname, ext );
+			_makepath( path_buffer, drive, dir, NULL, NULL ); // removes the file name and extension from the buffer
+			strncat(path_buffer, "PISS.vrmanifest", sizeof("PISS.vrmanifest"));
+			EVRApplicationError app_error;
+			app_error = oApplications->AddApplicationManifest(path_buffer, false);
 
-		//printf( "%s (%d).\n", path_buffer, app_error );
-    }
+			//printf( "%s (%d).\n", path_buffer, app_error );
+		}
+	}
+
+	time_t now = time(NULL);
+	//time_t now = 1667707200; // 2022 Nov 6th at midnight
+	//time_t now = 1678597200; // 2023 Mar 12th at midnight
+	int hoursSinceEpoch = now / 3600;
+	int sshour = hoursSinceEpoch;
 
     while( true )
     {
 
-		time_t now = time(NULL);
-		struct tm *tm_struct = localtime(&now);
+		//now = now + 1; //increase time by one second each while loop
+		now = time(NULL);
+		
+		hoursSinceEpoch = now / 3600;
+		struct tm *tm_struct = gmtime(&now);
 
-		int hour = tm_struct->tm_hour;
-		int day  = tm_struct->tm_yday;
-		int year = tm_struct->tm_year;
-
-		if (sshour < 0 || ssday < 0 || ssyear < 0)
+		// check to see if its a new hour
+		if (sshour != hoursSinceEpoch)
 		{
-			sshour = hour;
-			ssday  = day;
-			ssyear = year;
-		}
-
-		// breaks on new years 2099 will prob fix that before then
-		if (hour > sshour || day > ssday || year > ssyear)
-		{
-
-			time_t rawtime;
-			struct tm * timeinfo;
-			time ( &rawtime );
-			timeinfo = localtime ( &rawtime );
 
 			char path_buffer[_MAX_PATH];
 			char drive[_MAX_DRIVE];
@@ -140,14 +133,14 @@ int main()
 			strncat(path_buffer, ssFolderName, sizeof(ssFolderName));
 			CreateDirectory(path_buffer, NULL);
 			char ssMonthFolder[] = "0000-00\\";
-			strftime(ssMonthFolder, sizeof ssMonthFolder, "%Y-%m\\", timeinfo);
+			strftime(ssMonthFolder, sizeof ssMonthFolder, "%Y-%m\\", tm_struct);
 			strncat(path_buffer, ssMonthFolder, sizeof ssMonthFolder);
 			CreateDirectory(path_buffer, NULL);
 
 			char timestamp[] = "2011-10-08_07-07-09";
 			char screenshotpath[sizeof path_buffer + sizeof timestamp];
 			strcpy(screenshotpath, path_buffer);
-			strftime(timestamp, sizeof timestamp, "%Y-%m-%d_%H-%M-%S", timeinfo);
+			strftime(timestamp, sizeof timestamp, "%Y-%m-%d_%H-%M-%S", tm_struct);
 			strncat(screenshotpath, timestamp, sizeof timestamp);
 			char screenshotpathvr[sizeof screenshotpath + 4];
 			strcpy(screenshotpathvr, screenshotpath);
@@ -157,14 +150,13 @@ int main()
 			EVRScreenshotError ssERR;
 			ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, screenshotpath, screenshotpathvr);
 			printf( "Screenshot (%d).\n", ssERR );
-			//printf( "Current Directory: %s\n", path_buffer);
+			printf( "Current Directory: %s\n", screenshotpath);
 
-			sshour = hour;
-			ssday  = day;
-			ssyear = year;
+			sshour = hoursSinceEpoch;
+
 		}
 
-		Sleep( 50 );
+		Sleep( 500 ); // sleep for half a second (500ms)
     }
 
 	return 0;
