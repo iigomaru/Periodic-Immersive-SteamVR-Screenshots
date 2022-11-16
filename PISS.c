@@ -21,6 +21,9 @@
 #undef EXTERN_C
 #include "openvr_capi.h"
 
+/* Include the configuration */
+#include "config.h"
+
 /*
  * OpenVR Doesn't define these for some reason (I don't remember why) so we
  * define the functions here. They are copy-pasted from the bottom of openvr_capi.
@@ -61,6 +64,48 @@ struct VR_IVRApplications_FnTable * oApplications;
 struct VR_IVRScreenshots_FnTable * oScreenshots;
 //struct VR_IVRInput_FnTable * oInput;
 
+static int
+takescreenshot(struct tm * tm_struct)
+{
+	char path_buffer[_MAX_PATH];
+	char drive[_MAX_DRIVE];
+	char dir[_MAX_DIR];
+	char fname[_MAX_FNAME];
+	char ext[_MAX_EXT];
+
+	/* Gets the path of the exe file */
+	GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
+	_splitpath( path_buffer, drive, dir, fname, ext );
+	_makepath( path_buffer, drive, dir, NULL, NULL ); /* removes the file name and extension from the buffer */
+	char ssFolderName[] = "Screenshots\\";
+	strncat(path_buffer, ssFolderName, sizeof(ssFolderName));
+	CreateDirectory(path_buffer, NULL);
+	char ssMonthFolder[] = "1970-01\\";
+	strftime(ssMonthFolder, sizeof(ssMonthFolder), "%Y-%m\\", tm_struct);
+	strncat(path_buffer, ssMonthFolder, sizeof(ssMonthFolder));
+	CreateDirectory(path_buffer, NULL);
+
+	char timestamp[] = "1970-01-01_00-00-00";
+	char screenshotpath[sizeof(path_buffer) + sizeof(timestamp)];
+	strcpy(screenshotpath, path_buffer);
+	strftime(timestamp, sizeof(timestamp), "%Y-%m-%d_%H-%M-%S", tm_struct);
+	strncat(screenshotpath, timestamp, sizeof(timestamp));
+	char screenshotpathvr[sizeof(screenshotpath) + 4];
+	strcpy(screenshotpathvr, screenshotpath);
+	strncat(screenshotpathvr, "_VR", 4);
+
+	ScreenshotHandle_t screenshot;
+	EVRScreenshotError ssERR;
+	EVRScreenshotType ssType = EVRScreenshotType_VRScreenshotType_Stereo;
+
+	/* applys save stereo screenshot setting set in config.h */
+	if (savestereosscreenshot == 0) { ssType = EVRScreenshotType_VRScreenshotType_Mono; }
+
+	ssERR = oScreenshots->RequestScreenshot(&screenshot, ssType, screenshotpath, screenshotpathvr);
+
+	printf( "Screenshot (%d).\n", ssERR );
+	printf( "Current Directory: %s\n", screenshotpath);
+}
 
 int main()
 {
@@ -117,6 +162,8 @@ int main()
 	int hoursSinceEpoch = now / 3600;
 	int sshour = hoursSinceEpoch;
 
+	printf("initialized successfully\n");
+
     while( true )
     {
 
@@ -129,40 +176,10 @@ int main()
 		/* check to see if its a new hour */
 		if (sshour != hoursSinceEpoch)
 		{
-
-			char path_buffer[_MAX_PATH];
-			char drive[_MAX_DRIVE];
-			char dir[_MAX_DIR];
-			char fname[_MAX_FNAME];
-			char ext[_MAX_EXT];
-
-
-			/* Gets the path of the exe file */
-			GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
-			_splitpath( path_buffer, drive, dir, fname, ext );
-			_makepath( path_buffer, drive, dir, NULL, NULL ); /* removes the file name and extension from the buffer */
-			char ssFolderName[] = "Screenshots\\";
-			strncat(path_buffer, ssFolderName, sizeof(ssFolderName));
-			CreateDirectory(path_buffer, NULL);
-			char ssMonthFolder[] = "0000-00\\";
-			strftime(ssMonthFolder, sizeof ssMonthFolder, "%Y-%m\\", tm_struct);
-			strncat(path_buffer, ssMonthFolder, sizeof ssMonthFolder);
-			CreateDirectory(path_buffer, NULL);
-
-			char timestamp[] = "1970-01-01_00-00-00";
-			char screenshotpath[sizeof path_buffer + sizeof timestamp];
-			strcpy(screenshotpath, path_buffer);
-			strftime(timestamp, sizeof timestamp, "%Y-%m-%d_%H-%M-%S", tm_struct);
-			strncat(screenshotpath, timestamp, sizeof timestamp);
-			char screenshotpathvr[sizeof screenshotpath + 4];
-			strcpy(screenshotpathvr, screenshotpath);
-			strncat(screenshotpathvr, "_VR", 4);
-
-			ScreenshotHandle_t screenshot;
-			EVRScreenshotError ssERR;
-			ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, screenshotpath, screenshotpathvr);
-			printf( "Screenshot (%d).\n", ssERR );
-			printf( "Current Directory: %s\n", screenshotpath);
+			if (takehourlyscreenshot != 0)
+			{
+				takescreenshot(tm_struct);
+			}
 
 			sshour = hoursSinceEpoch;
 
