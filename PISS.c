@@ -100,6 +100,92 @@ takescreenshot(struct tm * tm_struct, char * ssFilepath)
 	printf( "Current Directory: %s\n", screenshotpath);
 }
 
+#define ROTL(a,b) (((a) << (b)) | ((a) >> (32 - (b))))
+#define QR(a, b, c, d) (			\
+	a += b,  d ^= a,  d = ROTL(d,16),	\
+	c += d,  b ^= c,  b = ROTL(b,12),	\
+	a += b,  d ^= a,  d = ROTL(d, 8),	\
+	c += d,  b ^= c,  b = ROTL(b, 7))
+#define ROUNDS 20
+ 
+static void 
+chacha_block(uint32_t out[16], uint32_t const in[16])
+{
+	int i;
+	uint32_t x[16];
+
+	for (i = 0; i < 16; ++i)	
+		x[i] = in[i];
+	// 10 loops × 2 rounds/loop = 20 rounds
+	for (i = 0; i < ROUNDS; i += 2) {
+		// Odd round
+		QR(x[0], x[4], x[ 8], x[12]); // column 0
+		QR(x[1], x[5], x[ 9], x[13]); // column 1
+		QR(x[2], x[6], x[10], x[14]); // column 2
+		QR(x[3], x[7], x[11], x[15]); // column 3
+		// Even round
+		QR(x[0], x[5], x[10], x[15]); // diagonal 1 (main diagonal)
+		QR(x[1], x[6], x[11], x[12]); // diagonal 2
+		QR(x[2], x[7], x[ 8], x[13]); // diagonal 3
+		QR(x[3], x[4], x[ 9], x[14]); // diagonal 4
+	}
+	for (i = 0; i < 16; ++i)
+		out[i] = x[i] + in[i];
+}
+
+/* 
+ * Takes the current time and gets the amount of hours since unix epoch and then
+ * uses that with a ChaCha20 block to create a psudo-random block, and then the
+ * first uint32_t of that block is then mod 3000 to get a random value in seconds
+ * that is between 0 and 50 minutes, this value is then added with 300 which is 
+ * 5 minutes in seconds which is then added to the value of the current hour in
+ * seconds giving us a timestamp between the start of the hour + (00:05 - 00:55)
+ * if the current time is greater then the time chosen then it will return max value
+ */
+
+/* returns a random time within the hour between the middle 50 minutes of the hour (XX:05 - XX:55)*/
+static time_t
+PRNGTimeGen(time_t const currentTime)
+{
+	uint32_t chachainit[16];
+	/* setup the chacha20 constants */
+	chachainit[0] = 0x61707865U; /* "expa" */
+    chachainit[1] = 0x3320646eU; /* "nd 3" */
+    chachainit[2] = 0x79622d32U; /* "2-by" */
+    chachainit[3] = 0x6b206574U; /* "te k" */
+	/* explicity set the value of the "key"*/
+	chachainit[4]  = 0x00000000U;
+	chachainit[5]  = 0x00000000U;
+	chachainit[6]  = 0x00000000U;
+	chachainit[7]  = 0x00000000U;
+	chachainit[8]  = 0x00000000U;
+	chachainit[9]  = 0x00000000U;
+	chachainit[10] = 0x00000000U;
+	chachainit[11] = 0x00000000U;
+	/* explicity set the value of the "counter" */
+	chachainit[12] = 0x00000000U;
+	/* explicity set the value of the "nonce" */
+	chachainit[13] = 0x00000000U;
+	/* last two positions are used filled by the number of hours since unix epoch */
+	uint64_t hoursSinceEpoch;
+	hoursSinceEpoch = currentTime / 3600;
+	chachainit[14] = ((hoursSinceEpoch & 0xFFFFFFFF00000000LL) >> 32);
+	chachainit[15] = (hoursSinceEpoch & 0xFFFFFFFFLL);
+	uint32_t chachaout[16];
+	chacha_block(chachaout, chachainit);
+	time_t PRNGTime = 0;
+	uint32_t addedSeconds = 0;
+	addedSeconds = (chachaout[0] % 3000) + 300;
+	PRNGTime = (hoursSinceEpoch * 3600) + addedSeconds;
+	/* we do this so if you start the program after the chosen time it does not attempt to screenshot */
+	if (PRNGTime <= currentTime)
+	{
+		printf("screenshot time for this hour has already passed\n");
+		return (time_t)(hoursSinceEpoch * 3600) + (3600 * 24);
+	}
+	return PRNGTime;
+}
+
 char ssFilepath[_MAX_PATH];
 
 int main()
@@ -166,6 +252,13 @@ int main()
 
 	printf("initialized successfully\n");
 
+	time_t PRNGTime = PRNGTimeGen(now);
+	//char PRNGtimestamp[] = "1970-01-01_00-00-00";
+	//struct tm *PRNGTime_struct = gmtime(&PRNGTime);
+	//strftime(PRNGtimestamp, sizeof(PRNGtimestamp), "%Y-%m-%d_%H-%M-%S", PRNGTime_struct);
+	//printf("%s", PRNGtimestamp);
+
+
     while( true )
     {
 
@@ -185,9 +278,29 @@ int main()
 
 			sshour = hoursSinceEpoch;
 
+			PRNGTime = PRNGTimeGen(now);
+
 		}
 
-		Sleep( 500 ); /* sleep for half a second (500ms) */
+		/* check to see if its a new hour */
+		if (now >= PRNGTime)
+		{
+			if (takerandomscreenshot != 0)
+			{
+				takescreenshot(tm_struct, ssFilepath);
+				char PRNGtimestamp[] = "1970-01-01_00-00-00";
+				struct tm *PRNGTime_struct = gmtime(&PRNGTime);
+				strftime(PRNGtimestamp, sizeof(PRNGtimestamp), "%Y-%m-%d_%H-%M-%S", PRNGTime_struct);
+				printf("Random screenshot at (%s) \n", PRNGtimestamp);
+			}
+
+			PRNGTime = (time_t)(hoursSinceEpoch * 3600) + (3600 * 24);
+
+		}
+
+
+
+		Sleep(500); /* sleep for half a second (500ms) */
     }
 
 	return 0;
