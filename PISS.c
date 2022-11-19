@@ -64,19 +64,12 @@ struct VR_IVRApplications_FnTable * oApplications;
 struct VR_IVRScreenshots_FnTable * oScreenshots;
 //struct VR_IVRInput_FnTable * oInput;
 
-static int
-takescreenshot(struct tm * tm_struct)
+
+static void
+takescreenshot(struct tm * tm_struct, char * ssFilepath)
 {
 	char path_buffer[_MAX_PATH];
-	char drive[_MAX_DRIVE];
-	char dir[_MAX_DIR];
-	char fname[_MAX_FNAME];
-	char ext[_MAX_EXT];
-
-	/* Gets the path of the exe file */
-	GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
-	_splitpath( path_buffer, drive, dir, fname, ext );
-	_makepath( path_buffer, drive, dir, NULL, NULL ); /* removes the file name and extension from the buffer */
+	strcpy(path_buffer, ssFilepath);
 	char ssFolderName[] = "Screenshots\\";
 	strncat(path_buffer, ssFolderName, sizeof(ssFolderName));
 	CreateDirectory(path_buffer, NULL);
@@ -106,6 +99,8 @@ takescreenshot(struct tm * tm_struct)
 	printf( "Screenshot (%d).\n", ssERR );
 	printf( "Current Directory: %s\n", screenshotpath);
 }
+
+char ssFilepath[_MAX_PATH];
 
 int main()
 {
@@ -139,21 +134,28 @@ int main()
 		if (!oApplications->IsApplicationInstalled("iigo.PISS"))
 		{
 			char path_buffer[_MAX_PATH];
-			char drive[_MAX_DRIVE];
-			char dir[_MAX_DIR];
-			char fname[_MAX_FNAME];
-			char ext[_MAX_EXT];
-
-			/* Gets the path of the exe file */
-			GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
-			_splitpath( path_buffer, drive, dir, fname, ext );
-			_makepath( path_buffer, drive, dir, NULL, NULL ); /* removes the file name and extension from the buffer */
+			strcpy(path_buffer, ssFilepath);
 			strncat(path_buffer, "PISS.vrmanifest", sizeof("PISS.vrmanifest"));
 			EVRApplicationError app_error;
 			app_error = oApplications->AddApplicationManifest(path_buffer, false);
 
 			//printf( "%s (%d).\n", path_buffer, app_error );
 		}
+	}
+
+	/* Setup where the screenshots will be saved to */
+	{
+		char path_buffer[_MAX_PATH];
+		char drive[_MAX_DRIVE];
+		char dir[_MAX_DIR];
+		char fname[_MAX_FNAME];
+		char ext[_MAX_EXT];
+
+		/* Gets the path of the exe file */
+		GetModuleFileName( NULL, path_buffer, sizeof(path_buffer));
+		_splitpath( path_buffer, drive, dir, fname, ext );
+		_makepath( path_buffer, drive, dir, NULL, NULL ); /* removes the file name and extension from the buffer */
+		strcpy(ssFilepath, path_buffer);
 	}
 
 	time_t now = time(NULL);
@@ -178,7 +180,7 @@ int main()
 		{
 			if (takehourlyscreenshot != 0)
 			{
-				takescreenshot(tm_struct);
+				takescreenshot(tm_struct, ssFilepath);
 			}
 
 			sshour = hoursSinceEpoch;
